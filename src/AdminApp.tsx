@@ -31,6 +31,7 @@ export default function AdminApp() {
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [newSection, setNewSection] = useState({ title: '', prompt: '', code: '', image: '', figmaUrl: '' });
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
   useEffect(() => {
@@ -105,12 +106,67 @@ export default function AdminApp() {
     }
   };
 
-  const handleImageUpload = (file: File) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setNewSection(prev => ({ ...prev, image: reader.result as string }));
-    };
-    reader.readAsDataURL(file);
+  const compressImage = async (file: File): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(img.src);
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        const MAX_WIDTH = 900;
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", { type: 'image/webp' });
+            resolve(compressedFile);
+          } else {
+            reject(new Error('Compression failed'));
+          }
+        }, 'image/webp', 0.8);
+      };
+      img.onerror = reject;
+    });
+  };
+
+  const handleImageUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file.');
+      return;
+    }
+
+    try {
+      const compressed = await compressImage(file);
+      const previewUrl = URL.createObjectURL(compressed);
+      
+      // Cleanup previous blob URL if exists
+      if (newSection.image && newSection.image.startsWith('blob:')) {
+        URL.revokeObjectURL(newSection.image);
+      }
+      
+      setNewSection(prev => ({ ...prev, image: previewUrl }));
+      setSelectedImageFile(compressed);
+    } catch (err) {
+      console.error('Image compression failed:', err);
+      const previewUrl = URL.createObjectURL(file);
+      setNewSection(prev => ({ ...prev, image: previewUrl }));
+      setSelectedImageFile(file);
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -139,16 +195,32 @@ export default function AdminApp() {
 
     const method = editingSectionId ? 'PUT' : 'POST';
 
+    const formData = new FormData();
+    formData.append('title', newSection.title);
+    formData.append('prompt', newSection.prompt);
+    formData.append('code', newSection.code);
+    formData.append('figmaUrl', newSection.figmaUrl);
+
+    if (selectedImageFile) {
+      formData.append('image', selectedImageFile);
+    } else if (newSection.image && !newSection.image.startsWith('blob:')) {
+      // Keep existing image URL if no new file is selected
+      formData.append('image', newSection.image);
+    }
+
     try {
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSection)
+        body: formData
       });
       if (res.ok) {
+        if (newSection.image && newSection.image.startsWith('blob:')) {
+          URL.revokeObjectURL(newSection.image);
+        }
         setIsAddingSection(false);
         setEditingSectionId(null);
         setNewSection({ title: '', prompt: '', code: '', image: '', figmaUrl: '' });
+        setSelectedImageFile(null);
         await fetchComponents();
       }
     } catch (err) {
@@ -158,6 +230,7 @@ export default function AdminApp() {
 
   const handleEditSection = (sub: Subsection) => {
     setEditingSectionId(sub.id);
+    setSelectedImageFile(null);
     setNewSection({
       title: sub.title,
       prompt: sub.prompt || '',
@@ -269,7 +342,10 @@ export default function AdminApp() {
                 }}>
                   <div style={{ flex: 1, padding: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                     {sub.image ? (
-                      <img src={sub.image} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                      <img 
+                        src={sub.image.startsWith('/') ? apiUrl(sub.image) : sub.image} 
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                      />
                     ) : (
                       <Layout size={32} color="#E5E7EB" />
                     )}
@@ -303,11 +379,15 @@ export default function AdminApp() {
                   <header className="modal-header">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       <button
-                        onClick={() => {
-                          setIsAddingSection(false);
-                          setEditingSectionId(null);
-                          setNewSection({ title: '', prompt: '', code: '', image: '', figmaUrl: '' });
-                        }}
+                          onClick={() => {
+                            if (newSection.image && newSection.image.startsWith('blob:')) {
+                              URL.revokeObjectURL(newSection.image);
+                            }
+                            setIsAddingSection(false);
+                            setEditingSectionId(null);
+                            setNewSection({ title: '', prompt: '', code: '', image: '', figmaUrl: '' });
+                            setSelectedImageFile(null);
+                          }}
                         style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
                       >
                         <ChevronRight size={20} style={{ transform: 'rotate(180deg)' }} />
@@ -393,7 +473,10 @@ export default function AdminApp() {
                           onClick={() => document.getElementById('sectionImage')?.click()}
                         >
                           {newSection.image ? (
-                            <img src={newSection.image} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <img 
+                              src={newSection.image.startsWith('/') ? apiUrl(newSection.image) : newSection.image} 
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                            />
                           ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', color: 'var(--text-secondary)' }}>
                               <Upload size={24} />
@@ -415,9 +498,13 @@ export default function AdminApp() {
                           {editingSectionId ? 'Update Section' : 'Save Section'}
                         </button>
                         <button className="modal-action-btn outline" onClick={() => {
+                          if (newSection.image && newSection.image.startsWith('blob:')) {
+                            URL.revokeObjectURL(newSection.image);
+                          }
                           setIsAddingSection(false);
                           setEditingSectionId(null);
                           setNewSection({ title: '', prompt: '', code: '', image: '', figmaUrl: '' });
+                          setSelectedImageFile(null);
                         }} style={{ height: '52px' }}>Cancel</button>
                       </div>
 

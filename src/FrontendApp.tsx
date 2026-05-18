@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Copy, Wand2, X, Download, Code as CodeIcon, FileText, Layout, ImageIcon, LayoutGrid, Upload, GripVertical, Plus } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { apiUrl } from './api';
+import { SearchableFontDropdown } from './SearchableFontDropdown';
+import GOOGLE_FONTS from './google_fonts.json';
 
 
 
@@ -32,6 +34,8 @@ interface ComponentData {
 
 
 // ── Sidebar Component ─────────────────────────────────────────────────────────
+const SHOW_DESIGN_MANIFEST = false;
+
 function Sidebar({ activeTab, onTabSelect, components }: { activeTab: string; onTabSelect: (tab: string) => void; components: ComponentData[] }) {
   return (
     <nav className="sidebar">
@@ -44,13 +48,15 @@ function Sidebar({ activeTab, onTabSelect, components }: { activeTab: string; on
           <span className="nav-item-label">Image to prompt</span>
         </div>
 
-        <div
-          className={`nav-item ${activeTab === 'Design Manifest' ? 'active' : ''}`}
-          onClick={() => onTabSelect('Design Manifest')}
-        >
-          <Wand2 size={14} style={{ flexShrink: 0 }} />
-          <span className="nav-item-label">Design Manifest</span>
-        </div>
+        {SHOW_DESIGN_MANIFEST && (
+          <div
+            className={`nav-item ${activeTab === 'Design Manifest' ? 'active' : ''}`}
+            onClick={() => onTabSelect('Design Manifest')}
+          >
+            <Wand2 size={14} style={{ flexShrink: 0 }} />
+            <span className="nav-item-label">Design Manifest</span>
+          </div>
+        )}
 
         <div
           className={`nav-item ${activeTab === 'Clients Resources' ? 'active' : ''}`}
@@ -150,7 +156,10 @@ function ComponentModal({ item, onClose }: { item: GalleryItem; onClose: () => v
           <div className="modal-preview-area">
             <div style={{ width: '280px', height: '180px' }}>
               {item.image ? (
-                <img src={item.image} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', border: '1px solid var(--border)' }} />
+                <img
+                  src={item.image.startsWith('/') ? apiUrl(item.image) : item.image}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px', border: '1px solid var(--border)' }}
+                />
               ) : item.category === 'Borders' ? (
                 <BorderPreview type={item.title} />
               ) : (
@@ -232,6 +241,7 @@ const DesignManifestPreview = ({
   contentSource,
   contentFileName,
   screenshotUrl,
+  screenshotUrls,
   structuredPrompt,
   devSpecResult,
   onTransform,
@@ -253,8 +263,14 @@ const DesignManifestPreview = ({
   onPreviewFigma?: () => void;
   onExportMD?: () => void;
   isGenerating?: boolean;
+  screenshotUrls?: string[];
 }) => {
   const [activeTab, setActiveTab] = useState<'prompt' | 'source' | 'screenshot' | 'json' | 'devspec'>('prompt');
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  useEffect(() => {
+    setCurrentSlide(0);
+  }, [screenshotUrls]);
 
   useEffect(() => {
     if (screenshotUrl && activeTab === 'prompt') {
@@ -288,10 +304,10 @@ const DesignManifestPreview = ({
                 Our AI is analyzing your reference sites and sections to craft a specialized design specification.
               </p>
             </div>
-            <div style={{ 
-              marginTop: '12px', 
-              padding: '6px 12px', 
-              background: 'rgba(51, 104, 247, 0.1)', 
+            <div style={{
+              marginTop: '12px',
+              padding: '6px 12px',
+              background: 'rgba(51, 104, 247, 0.1)',
               borderRadius: '999px',
               fontSize: '11px',
               fontWeight: 700,
@@ -531,9 +547,27 @@ const DesignManifestPreview = ({
             </div>
           )}
 
-          {activeTab === 'screenshot' && screenshotUrl && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center' }}>
-              <img src={screenshotUrl} style={{ width: '100%', borderRadius: '12px', border: '1px solid var(--border)' }} alt="Reference Website Screenshot" />
+          {(activeTab === 'screenshot' && (screenshotUrl || (screenshotUrls && screenshotUrls.length > 0))) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center', width: '100%' }}>
+              {screenshotUrls && screenshotUrls.length > 1 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 500, color: '#E5E7EB' }}>Reference Screenshots ({screenshotUrls.length})</span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button type="button" onClick={() => setCurrentSlide(prev => Math.max(0, prev - 1))} disabled={currentSlide === 0} style={{ padding: '4px 8px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '4px', color: currentSlide === 0 ? '#666' : '#fff', cursor: currentSlide === 0 ? 'default' : 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.2)'} onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,0.1)'}>&larr;</button>
+                      <button type="button" onClick={() => setCurrentSlide(prev => Math.min(screenshotUrls.length - 1, prev + 1))} disabled={currentSlide === screenshotUrls.length - 1} style={{ padding: '4px 8px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '4px', color: currentSlide === screenshotUrls.length - 1 ? '#666' : '#fff', cursor: currentSlide === screenshotUrls.length - 1 ? 'default' : 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.2)'} onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,0.1)'}>&rarr;</button>
+                    </div>
+                  </div>
+                  <img src={screenshotUrls[currentSlide]} style={{ width: '100%', borderRadius: '12px', border: '1px solid var(--border)' }} alt={`Reference Website Screenshot ${currentSlide + 1}`} />
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', marginTop: '4px' }}>
+                    {screenshotUrls.map((_, i) => (
+                      <div key={i} onClick={() => setCurrentSlide(i)} style={{ width: '6px', height: '6px', borderRadius: '50%', background: currentSlide === i ? '#3368F7' : 'rgba(255,255,255,0.2)', cursor: 'pointer', transition: 'background 0.2s' }} />
+                    ))}
+                  </div>
+                </div>
+              ) : ((screenshotUrls && screenshotUrls.length === 1 ? screenshotUrls[0] : screenshotUrl) && (
+                <img src={screenshotUrls && screenshotUrls.length === 1 ? screenshotUrls[0] : screenshotUrl} style={{ width: '100%', borderRadius: '12px', border: '1px solid var(--border)' }} alt="Reference Website Screenshot" />
+              ))}
             </div>
           )}
 
@@ -599,9 +633,9 @@ const DesignManifestPreview = ({
           )}
         </div>
 
-        <div style={{ 
-          padding: '20px 32px', 
-          borderTop: '1px solid var(--border)', 
+        <div style={{
+          padding: '20px 32px',
+          borderTop: '1px solid var(--border)',
           background: 'rgba(0,0,0,0.1)',
           display: 'flex',
           gap: '12px',
@@ -637,7 +671,7 @@ const DesignManifestPreview = ({
               Preview In Figma
             </button>
           )}
-          
+
           {onExportMD && (
             <button
               className="action-btn secondary"
@@ -655,12 +689,93 @@ const DesignManifestPreview = ({
   );
 };
 
-const GOOGLE_FONTS = [
-  'Inter', 'Space Grotesk', 'Poppins', 'Montserrat', 'Roboto',
-  'Open Sans', 'Playfair Display', 'Merriweather', 'Nunito', 'Outfit',
-  'Syne', 'Lexend', 'Sora', 'Work Sans', 'Kanit', 'Ubuntu',
-  'Lato', 'Oswald', 'Raleway', 'Quicksand'
-];
+
+
+const WEBSITE_LAYOUT_SECTIONS = {
+  "Landing Page": {
+    options: [
+      "Hero Section",
+      "Trust Logos",
+      "Problem Statement",
+      "Solution Overview",
+      "Features",
+      "Benefits",
+      "How It Works",
+      "Product Showcase",
+      "Before / After",
+      "Testimonials",
+      "Case Studies",
+      "Pricing",
+      "FAQ",
+      "Lead Magnet",
+      "CTA Banner",
+      "Contact Form",
+      "Footer"
+    ]
+  },
+
+  "Homepage": {
+    options: [
+      "Hero Section",
+      "Featured Services",
+      "About Us",
+      "Why Choose Us",
+      "Process",
+      "Testimonials",
+      "Blog Preview",
+      "FAQ",
+      "Contact Section",
+      "Footer"
+    ]
+  },
+
+  "E-commerce Store": {
+    options: [
+      "Hero Banner",
+      "Featured Categories",
+      "Best Sellers",
+      "New Arrivals",
+      "Product Grid",
+      "Promotional Banner",
+      "Reviews",
+      "FAQ",
+      "Newsletter Signup",
+      "Footer"
+    ]
+  },
+
+  "Portfolio Website": {
+    options: [
+      "Hero Section",
+      "About Me",
+      "Skills",
+      "Selected Work",
+      "Case Studies",
+      "Testimonials",
+      "Awards",
+      "Resume Download",
+      "Contact Form",
+      "Footer"
+    ]
+  },
+
+  "Web Application (SaaS)": {
+    options: [
+      "Hero Section",
+      "Product Demo",
+      "Key Features",
+      "Integrations",
+      "Workflow Section",
+      "Analytics Preview",
+      "Pricing",
+      "Security & Compliance",
+      "Testimonials",
+      "FAQ",
+      "CTA Banner",
+      "Footer"
+    ]
+  }
+};
 
 const SECTION_TYPES = [
   'Hero Section', 'Header', 'About', 'Services', 'Features',
@@ -741,11 +856,50 @@ export default function FrontendApp() {
   const [generatedPrompt, setGeneratedPrompt] = useState('');
 
   const [referenceScreenshot, setReferenceScreenshot] = useState<string | null>(null);
+  const [referenceScreenshots, setReferenceScreenshots] = useState<string[]>([]);
   const [structuredPromptResult, setStructuredPromptResult] = useState<any>(null);
   const [devSpecResult, setDevSpecResult] = useState<any>(null);
   const [isGeneratingFromReference, setIsGeneratingFromReference] = useState(false);
   const [isTransforming, setIsTransforming] = useState(false);
   const [isExportingToFigma, setIsExportingToFigma] = useState(false);
+
+  const compressImage = async (file: File): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(img.src);
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        const MAX_WIDTH = 900;
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", { type: 'image/webp' });
+            resolve(compressedFile);
+          } else {
+            reject(new Error('Compression failed'));
+          }
+        }, 'image/webp', 0.8);
+      };
+      img.onerror = reject;
+    });
+  };
 
   const handleTransform = async () => {
     if (!structuredPromptResult) return;
@@ -776,32 +930,16 @@ export default function FrontendApp() {
     setIsGeneratingFromReference(true);
     setGeneratedPrompt("🚀 Initializing unified pipeline... Capturing and analyzing reference website (Step 1/2)...");
     setReferenceScreenshot(null);
+    setReferenceScreenshots([]);
     setStructuredPromptResult(null);
     setDevSpecResult(null);
 
     try {
-      const convertFileToBase64 = (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => {
-            const result = reader.result as string;
-            // Extract just the base64 part, stripping the data URL prefix
-            resolve(result.split(',')[1] || result);
-          };
-          reader.onerror = error => reject(error);
-        });
-      };
-
-      const processedSections = await Promise.all(
-        manifest.clientResourcesSections.map(async (sec) => {
-          if (sec.imageFile) {
-            const base64 = await convertFileToBase64(sec.imageFile);
-            return { ...sec, imageBase64: base64, imageFile: undefined };
-          }
-          return sec;
-        })
-      );
+      const processedSections = manifest.clientResourcesSections.map((sec) => {
+        // Create a clean copy without the File object for the JSON payload
+        const { imageFile, imageUrl, ...rest } = sec;
+        return rest;
+      });
 
       const formData = new FormData();
       formData.append('referenceUrl', primaryUrl || '');
@@ -810,15 +948,22 @@ export default function FrontendApp() {
       formData.append('contentSource', manifest.contentSource || '');
       formData.append('activeTab', activeTab);
       if (manifest.manifestId) formData.append('manifestId', manifest.manifestId);
-      
-      formData.append('sections', JSON.stringify(activeTab === 'Clients Resources' 
+
+      // Add section images as separate files
+      manifest.clientResourcesSections.forEach((sec, idx) => {
+        if (sec.imageFile) {
+          formData.append(`sectionImage_${idx}`, sec.imageFile);
+        }
+      });
+
+      formData.append('sections', JSON.stringify(activeTab === 'Clients Resources'
         ? (manifest.clientResourcesSections || []).map(s => s.type).filter(Boolean)
         : manifest.sectionType));
-      
+
       formData.append('sectionOrder', JSON.stringify(activeTab === 'Clients Resources'
         ? (manifest.clientResourcesSections || []).map(s => s.type).filter(Boolean)
         : manifest.sectionOrder));
-        
+
       formData.append('businessName', manifest.businessName || '');
       formData.append('primaryColor', manifest.primaryColor || '');
       formData.append('secondaryColor', manifest.secondaryColor || '');
@@ -841,6 +986,11 @@ export default function FrontendApp() {
 
       setGeneratedPrompt(data.prompt);
       setReferenceScreenshot(data.screenshotUrl);
+      if (data.screenshotUrls && data.screenshotUrls.length > 0) {
+        setReferenceScreenshots(data.screenshotUrls);
+      } else if (data.screenshotUrl) {
+        setReferenceScreenshots([data.screenshotUrl]);
+      }
       setStructuredPromptResult(data.structuredPrompt);
       setManifest(prev => ({ ...prev, manifestId: data.manifestId, referenceUrls: [primaryUrl] }));
 
@@ -856,7 +1006,7 @@ export default function FrontendApp() {
 
   const handlePreviewFigma = async () => {
     if (!generatedPrompt) return;
-    
+
     setIsExportingToFigma(true);
     try {
       const res = await fetch(apiUrl('/api/figma-export'), {
@@ -869,17 +1019,17 @@ export default function FrontendApp() {
           activeTab
         })
       });
-      
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Export failed');
-      
+
       const designId = data.designId;
-      
+
       console.log('✅ Design processed for Figma. Design ID:', designId);
-      
+
       // Open Figma - Plugin will automatically fetch the latest design
       window.open('https://www.figma.com/files/recent', '_blank');
-      
+
     } catch (err: any) {
       alert(`⚠️ Figma Export Error: ${err.message}`);
     } finally {
@@ -892,7 +1042,7 @@ export default function FrontendApp() {
 
     const sections = manifest.clientResourcesSections || [];
     const references = manifest.clientResourcesWebsites || [];
-    
+
     const mdContent = `# Homepage Design Specification
 
 ## Project Overview
@@ -1128,7 +1278,20 @@ ${generatedPrompt}
                   <div className="step-header"><span className="step-number">01</span> Upload Photo</div>
                   <div className="zone-container dashed" style={{ cursor: 'pointer' }} onClick={() => document.getElementById('fileInput')?.click()}>
                     {previewUrl ? <img src={previewUrl} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : 'Drop image or click to select'}
-                    <input id="fileInput" type="file" style={{ display: 'none' }} onChange={e => { if (e.target.files?.[0]) { setFile(e.target.files[0]); setPreviewUrl(URL.createObjectURL(e.target.files[0])); } }} />
+                    <input id="fileInput" type="file" style={{ display: 'none' }} onChange={async e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        try {
+                          const compressed = await compressImage(file);
+                          setFile(compressed);
+                          setPreviewUrl(URL.createObjectURL(compressed));
+                        } catch (err) {
+                          console.error('Compression failed:', err);
+                          setFile(file);
+                          setPreviewUrl(URL.createObjectURL(file));
+                        }
+                      }
+                    }} />
                   </div>
                   <button className="action-btn" onClick={handleGenerate} disabled={!file || isProcessing}>{isProcessing ? 'Analyzing...' : 'Generate Prompt'}</button>
                 </div>
@@ -1248,28 +1411,24 @@ ${generatedPrompt}
                         <div className="step-number">03</div>
                         <span>Heading Font</span>
                       </div>
-                      <select
-                        className="manifest-input"
+                      <SearchableFontDropdown
                         value={manifest.headingFont}
-                        onChange={e => setManifest({ ...manifest, headingFont: e.target.value })}
-                      >
-                        <option value="" disabled>Select Font</option>
-                        {GOOGLE_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
-                      </select>
+                        onChange={val => setManifest({ ...manifest, headingFont: val })}
+                        fonts={GOOGLE_FONTS}
+                        placeholder="Select Font"
+                      />
                     </div>
                     <div className="manifest-section">
                       <div className="step-header">
                         <div className="step-number">04</div>
                         <span>Body Font</span>
                       </div>
-                      <select
-                        className="manifest-input"
+                      <SearchableFontDropdown
                         value={manifest.bodyFont}
-                        onChange={e => setManifest({ ...manifest, bodyFont: e.target.value })}
-                      >
-                        <option value="" disabled>Select Font</option>
-                        {GOOGLE_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
-                      </select>
+                        onChange={val => setManifest({ ...manifest, bodyFont: val })}
+                        fonts={GOOGLE_FONTS}
+                        placeholder="Select Font"
+                      />
                     </div>
                   </div>
 
@@ -1282,7 +1441,24 @@ ${generatedPrompt}
                       <select
                         className="manifest-input"
                         value={manifest.websiteLayout}
-                        onChange={e => setManifest({ ...manifest, websiteLayout: e.target.value })}
+                        onChange={e => {
+                          const selectedLayout = e.target.value;
+                          const layoutData = WEBSITE_LAYOUT_SECTIONS[selectedLayout as keyof typeof WEBSITE_LAYOUT_SECTIONS];
+                          
+                          const newSections = (manifest.clientResourcesSections || []).map(sec => {
+                            const isValid = layoutData && layoutData.options.includes(sec.type);
+                            return {
+                              ...sec,
+                              type: isValid ? sec.type : ''
+                            };
+                          });
+
+                          setManifest({
+                            ...manifest,
+                            websiteLayout: selectedLayout,
+                            clientResourcesSections: newSections
+                          });
+                        }}
                       >
                         <option value="" disabled>Select Layout</option>
                         {WEBSITE_LAYOUTS.map(l => <option key={l} value={l}>{l}</option>)}
@@ -1354,7 +1530,9 @@ ${generatedPrompt}
                                   style={{ flex: 1, height: '40px', backgroundPosition: 'right 12px center' }}
                                 >
                                   <option value="" disabled>Select Section</option>
-                                  {SECTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                                  {((WEBSITE_LAYOUT_SECTIONS[manifest.websiteLayout as keyof typeof WEBSITE_LAYOUT_SECTIONS]?.options || SECTION_TYPES)).map(t => (
+                                    <option key={t} value={t}>{t}</option>
+                                  ))}
                                 </select>
 
                                 <label
@@ -1369,14 +1547,30 @@ ${generatedPrompt}
                                     type="file"
                                     accept="image/*"
                                     style={{ display: 'none' }}
-                                    onChange={e => {
+                                    onChange={async e => {
                                       const file = e.target.files?.[0];
                                       if (file) {
-                                        const url = URL.createObjectURL(file);
-                                        const newSec = [...manifest.clientResourcesSections];
-                                        newSec[idx].imageFile = file;
-                                        newSec[idx].imageUrl = url;
-                                        setManifest({ ...manifest, clientResourcesSections: newSec });
+                                        try {
+                                          const compressed = await compressImage(file);
+                                          const url = URL.createObjectURL(compressed);
+                                          const newSec = [...manifest.clientResourcesSections];
+
+                                          // Cleanup old blob URL
+                                          if (newSec[idx].imageUrl && newSec[idx].imageUrl.startsWith('blob:')) {
+                                            URL.revokeObjectURL(newSec[idx].imageUrl);
+                                          }
+
+                                          newSec[idx].imageFile = compressed;
+                                          newSec[idx].imageUrl = url;
+                                          setManifest({ ...manifest, clientResourcesSections: newSec });
+                                        } catch (err) {
+                                          console.error('Compression failed:', err);
+                                          const url = URL.createObjectURL(file);
+                                          const newSec = [...manifest.clientResourcesSections];
+                                          newSec[idx].imageFile = file;
+                                          newSec[idx].imageUrl = url;
+                                          setManifest({ ...manifest, clientResourcesSections: newSec });
+                                        }
                                       }
                                     }}
                                   />
@@ -1400,7 +1594,22 @@ ${generatedPrompt}
                               {sec.imageUrl && (
                                 <div style={{ background: '#000', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)', padding: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                                   <img src={sec.imageUrl} alt="preview" style={{ height: '48px', width: 'auto', borderRadius: '4px', objectFit: 'cover' }} />
-                                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>{sec.imageFile?.name}</span>
+                                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', wordBreak: 'break-all', flex: 1 }}>{sec.imageFile?.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newSec = [...manifest.clientResourcesSections];
+                                      newSec[idx].imageFile = null;
+                                      newSec[idx].imageUrl = null;
+                                      setManifest({ ...manifest, clientResourcesSections: newSec });
+                                    }}
+                                    style={{ width: '40px', height: '40px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', color: '#ff4a4a', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,74,74,0.1)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                    title="Remove Image"
+                                  >
+                                    <X size={16} />
+                                  </button>
                                 </div>
                               )}
 
@@ -1516,7 +1725,16 @@ ${generatedPrompt}
                           <div key={idx} style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '12px', position: 'relative' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>URL Entry {idx + 1}</span>
-                              <button type="button" onClick={() => setManifest({ ...manifest, clientResourcesWebsites: manifest.clientResourcesWebsites.filter((_, i) => i !== idx) })} style={{ background: 'transparent', border: 'none', color: '#ff4a4a', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><X size={16} /></button>
+                              <button
+                                type="button"
+                                onClick={() => setManifest({ ...manifest, clientResourcesWebsites: manifest.clientResourcesWebsites.filter((_, i) => i !== idx) })}
+                                style={{ width: '40px', height: '40px', background: 'transparent', border: '1px solid var(--border)', borderRadius: '8px', color: '#ff4a4a', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}
+                                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,74,74,0.1)'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                title="Remove URL"
+                              >
+                                <X size={16} />
+                              </button>
                             </div>
                             <input
                               type="text"
@@ -1588,8 +1806,8 @@ ${generatedPrompt}
                               <FileText size={24} style={{ color: '#3368F7', marginBottom: '8px' }} />
                               <span className="content-info-name">{manifest.contentFileName}</span>
                               <span className="content-info-meta">
-                                {manifest.contentSource 
-                                  ? `${manifest.contentSource.length.toLocaleString()} characters detected` 
+                                {manifest.contentSource
+                                  ? `${manifest.contentSource.length.toLocaleString()} characters detected`
                                   : 'Document ready for AI analysis'}
                               </span>
                             </div>
@@ -1699,8 +1917,8 @@ ${generatedPrompt}
                               <FileText size={24} style={{ color: '#3368F7', marginBottom: '8px' }} />
                               <span className="content-info-name">{manifest.contentFileName}</span>
                               <span className="content-info-meta">
-                                {manifest.contentSource 
-                                  ? `${manifest.contentSource.length.toLocaleString()} characters detected` 
+                                {manifest.contentSource
+                                  ? `${manifest.contentSource.length.toLocaleString()} characters detected`
                                   : 'Document ready for AI analysis'}
                               </span>
                             </div>
@@ -1767,6 +1985,7 @@ ${generatedPrompt}
                     contentSource={manifest.contentSource}
                     contentFileName={manifest.contentFileName}
                     screenshotUrl={referenceScreenshot ?? undefined}
+                    screenshotUrls={referenceScreenshots}
                     structuredPrompt={structuredPromptResult}
                     devSpecResult={devSpecResult}
                     onTransform={handleTransform}
@@ -1798,7 +2017,10 @@ ${generatedPrompt}
                     }
                   }}>
                     {item.image ? (
-                      <img src={item.image} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img
+                        src={item.image.startsWith('/') ? apiUrl(item.image) : item.image}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
                     ) : activeTab === 'Borders' ? (
                       <BorderPreview type={item.title} />
                     ) : (
