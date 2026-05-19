@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Copy, Wand2, X, Download, Code as CodeIcon, FileText, Layout, ImageIcon, LayoutGrid, Upload, GripVertical, Plus } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { apiUrl } from './api';
@@ -554,8 +555,8 @@ const DesignManifestPreview = ({
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '13px', fontWeight: 500, color: '#E5E7EB' }}>Reference Screenshots ({screenshotUrls.length})</span>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <button type="button" onClick={() => setCurrentSlide(prev => Math.max(0, prev - 1))} disabled={currentSlide === 0} style={{ padding: '4px 8px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '4px', color: currentSlide === 0 ? '#666' : '#fff', cursor: currentSlide === 0 ? 'default' : 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.2)'} onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,0.1)'}>&larr;</button>
-                      <button type="button" onClick={() => setCurrentSlide(prev => Math.min(screenshotUrls.length - 1, prev + 1))} disabled={currentSlide === screenshotUrls.length - 1} style={{ padding: '4px 8px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '4px', color: currentSlide === screenshotUrls.length - 1 ? '#666' : '#fff', cursor: currentSlide === screenshotUrls.length - 1 ? 'default' : 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.2)'} onMouseLeave={e => e.currentTarget.style.background='rgba(255,255,255,0.1)'}>&rarr;</button>
+                      <button type="button" onClick={() => setCurrentSlide(prev => Math.max(0, prev - 1))} disabled={currentSlide === 0} style={{ padding: '4px 8px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '4px', color: currentSlide === 0 ? '#666' : '#fff', cursor: currentSlide === 0 ? 'default' : 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}>&larr;</button>
+                      <button type="button" onClick={() => setCurrentSlide(prev => Math.min(screenshotUrls.length - 1, prev + 1))} disabled={currentSlide === screenshotUrls.length - 1} style={{ padding: '4px 8px', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '4px', color: currentSlide === screenshotUrls.length - 1 ? '#666' : '#fff', cursor: currentSlide === screenshotUrls.length - 1 ? 'default' : 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}>&rarr;</button>
                     </div>
                   </div>
                   <img src={screenshotUrls[currentSlide]} style={{ width: '100%', borderRadius: '12px', border: '1px solid var(--border)' }} alt={`Reference Website Screenshot ${currentSlide + 1}`} />
@@ -788,10 +789,54 @@ const WEBSITE_LAYOUTS = [
   'Portfolio Website', 'Web Application (SaaS)'
 ];
 
+// ── URL ↔ Tab helpers ─────────────────────────────────────────────────────────
+const TAB_PATH_MAP: Record<string, string> = {
+  'Image to prompt': '/',
+  'Clients Resources': '/client-resources',
+  'Design Manifest': '/design-manifest',
+};
+
+const PATH_TAB_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(TAB_PATH_MAP).map(([tab, path]) => [path, tab])
+);
+
+function getTabFromPath(pathname: string): string {
+  const clean = pathname.replace(/\/$/, '') || '/';
+  if (PATH_TAB_MAP[clean]) return PATH_TAB_MAP[clean];
+  if (clean.startsWith('/components/')) {
+    return decodeURIComponent(clean.slice('/components/'.length));
+  }
+  return 'Image to prompt';
+}
+
+function getPathFromTab(tab: string): string {
+  return TAB_PATH_MAP[tab] ?? `/components/${encodeURIComponent(tab)}`;
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function FrontendApp() {
-  const [activeTab, setActiveTab] = useState('Image to prompt');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const [activeTab, setActiveTab] = useState(() => getTabFromPath(window.location.pathname));
   const [components, setComponents] = useState<ComponentData[]>([]);
+
+  // Sync state ← URL (browser back/forward)
+  useEffect(() => {
+    const tabFromUrl = getTabFromPath(location.pathname);
+    if (tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [location.pathname]);
+
+  // Sync URL ← state (sidebar clicks / programmatic changes)
+  useEffect(() => {
+    const expectedPath = getPathFromTab(activeTab);
+    const currentClean = location.pathname.replace(/\/$/, '') || '/';
+    if (expectedPath !== currentClean) {
+      navigate(expectedPath, { replace: false });
+    }
+  }, [activeTab]);
 
   // Design Manifest States
   const [manifest, setManifest] = useState({
@@ -1197,8 +1242,9 @@ ${generatedPrompt}
       .then(res => res.json())
       .then(data => {
         setComponents(data);
-        // Robust Sync: If current tab is not 'Home' and not in the new component list, go Home
-        if (activeTab !== 'Image to prompt' && !data.find((c: any) => c.name === activeTab)) {
+        // Robust Sync: Only reset if this is a dynamic component tab that no longer exists
+        const knownModules = ['Image to prompt', 'Clients Resources', 'Design Manifest'];
+        if (!knownModules.includes(activeTab) && !data.find((c: any) => c.name === activeTab)) {
           setActiveTab('Image to prompt');
         }
       });
@@ -1297,10 +1343,45 @@ ${generatedPrompt}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div className="step-header"><span className="step-number">02</span> AI Prompt</div>
-                  <div className="zone-container">
+                  <div className={`zone-container${!result && !errorMsg ? ' itp-empty-zone' : ''}`}>
                     {errorMsg ? (
                       <div style={{ padding: '16px', color: '#ff4a4a', fontSize: '13px', fontFamily: 'var(--font-mono)', lineHeight: '1.5' }}>
                         ⚠️ {errorMsg}
+                      </div>
+                    ) : isProcessing ? (
+                      <div className="itp-empty-state">
+                        <div className="animate-pulse" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+                          <Wand2 size={48} style={{ color: '#3368F7', opacity: 0.8 }} />
+                          <div style={{ textAlign: 'center' }}>
+                            <p className="itp-empty-title">Generating your prompt...</p>
+                            <p className="itp-empty-desc">
+                              Our AI is analyzing your reference sites and sections to craft a specialized design specification.
+                            </p>
+                          </div>
+                          <div style={{
+                            marginTop: '12px',
+                            padding: '6px 12px',
+                            background: 'rgba(51, 104, 247, 0.1)',
+                            borderRadius: '999px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            color: '#3368F7',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em'
+                          }}>
+                            Pipeline Active
+                          </div>
+                        </div>
+                      </div>
+                    ) : !result ? (
+                      <div className="itp-empty-state">
+                        <div className="itp-empty-icon">
+                          <Layout size={24} />
+                        </div>
+                        <p className="itp-empty-title">No Design Concept Yet</p>
+                        <p className="itp-empty-desc">
+                          Fill out the parameters on the left and generate a UI prompt to see your concept overview here.
+                        </p>
                       </div>
                     ) : (
                       <textarea value={result?.prompts?.['DALL-E 3'] || ''} readOnly style={{ width: '100%', height: '100%', background: 'transparent', border: 'none', padding: '16px', color: 'var(--text-primary)', font: 'inherit', resize: 'none' }} placeholder="Result will appear here..." />
@@ -1444,7 +1525,7 @@ ${generatedPrompt}
                         onChange={e => {
                           const selectedLayout = e.target.value;
                           const layoutData = WEBSITE_LAYOUT_SECTIONS[selectedLayout as keyof typeof WEBSITE_LAYOUT_SECTIONS];
-                          
+
                           const newSections = (manifest.clientResourcesSections || []).map(sec => {
                             const isValid = layoutData && layoutData.options.includes(sec.type);
                             return {
@@ -1480,15 +1561,15 @@ ${generatedPrompt}
                               setManifest({
                                 ...manifest,
                                 clientResourcesSections: [
-                                  { id: crypto.randomUUID(), type: '', imageFile: null, imageUrl: null, description: '' },
-                                  ...(manifest.clientResourcesSections || [])
+                                  ...(manifest.clientResourcesSections || []),
+                                  { id: crypto.randomUUID(), type: '', imageFile: null, imageUrl: null, description: '' }
                                 ]
                               });
                               const currentTarget = e.currentTarget;
                               setTimeout(() => {
                                 const list = currentTarget?.parentElement?.nextElementSibling;
                                 if (list) {
-                                  list.firstElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                  list.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                                 }
                               }, 50);
                             }}
