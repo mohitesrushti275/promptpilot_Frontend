@@ -1374,13 +1374,19 @@ ${generatedPrompt}
                         </div>
                       </div>
                     ) : !result ? (
-                      <div className="itp-empty-state">
-                        <div className="itp-empty-icon">
-                          <Layout size={24} />
-                        </div>
-                        <p className="itp-empty-title">No Design Concept Yet</p>
-                        <p className="itp-empty-desc">
-                          Fill out the parameters on the left and generate a UI prompt to see your concept overview here.
+                      <div style={{
+                        minHeight: '520px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '40px',
+                        flex: 1
+                      }}>
+                        <Layout size={48} style={{ marginBottom: '16px', opacity: 0.2 }} />
+                        <p style={{ fontSize: '14px', fontWeight: 500, color: '#E5E7EB' }}>No Visual Reference Yet</p>
+                        <p style={{ fontSize: '13px', marginTop: '8px', textAlign: 'center', maxWidth: '240px', color: '#94A3B8', lineHeight: 1.5 }}>
+                          Upload a UI image or screenshot and generate a structured design prompt to preview the extracted layout, styling, and component intelligence here.
                         </p>
                       </div>
                     ) : (
@@ -1408,9 +1414,9 @@ ${generatedPrompt}
                 </p>
               </div>
 
-              <div className="workspace-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 0.8fr)', gap: '2px', background: 'var(--border)', borderRadius: '12px', border: '1px solid var(--border)' }}>
+              <div className="workspace-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 0.8fr)', gap: '2px', background: 'var(--border)', borderRadius: '12px', border: '1px solid var(--border)', height: 'calc(100vh - 160px)', minHeight: '600px' }}>
                 {/* Left Panel - Form */}
-                <div style={{ background: 'var(--surface)', padding: '40px', display: 'flex', flexDirection: 'column', gap: '32px', borderTopLeftRadius: '11px', borderBottomLeftRadius: '11px' }}>
+                <div style={{ background: 'var(--surface)', padding: '40px', display: 'flex', flexDirection: 'column', gap: '32px', borderTopLeftRadius: '11px', borderBottomLeftRadius: '11px', overflowY: 'auto' }}>
 
                   <div className="manifest-section">
                     <div className="step-header">
